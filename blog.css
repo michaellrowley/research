@@ -14,7 +14,12 @@
 }
 
 html {
-    animation: fadein 1s;
+    overflow: scroll;
+}
+
+::-webkit-scrollbar {
+    width: 0px;
+    background: transparent; /* make scrollbar transparent */
 }
 
 @keyframes fadein {
@@ -27,6 +32,7 @@ html {
 }
 
 body {
+    animation: fadein 1s;
     padding: 4% 10%;
 }
 
@@ -276,5 +282,41 @@ video {
 }
 
 .brighten:hover {
-    color :rgba(255, 255, 255, 1);
+    color: rgba(255, 255, 255, 1);
+}
+
+#scroll-tab {
+    animation-name: ex;
+    animation-duration: 1s;
+    /* opacity: 0.3; */
+    width: 30px;
+    border-radius: 3px;
+    height: 70%;
+    top: 15%;
+    right: 20px;
+    position: fixed;
+    transition: 0.3s;
+    opacity: 1;
+}
+#scroll-tab:hover {
+    opacity: 0.8;
+}
+#scroll-body {
+    position: absolute;
+    width: 15%;
+    border-radius: 4px;
+    background-color: white;
+    height: 100%;
+    margin-left: 12px;
+    box-shadow: white 0 0 2px;
+}
+#scroll-marker {
+    border-radius: 7px;
+    width: 10px;
+    height: 1%;
+    box-shadow: white 0 0 5px;
+    background-color: white;
+    z-index: 1;
+    left: 9px;
+    position: absolute;
 }

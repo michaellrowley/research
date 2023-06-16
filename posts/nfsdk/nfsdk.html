@@ -28,14 +28,7 @@
         <p>
             <a href="https://netfiltersdk.com/">NetFilterSDK</a> is a software development kit (SDK) that enables developers to use a kernel-mode driver and
             user-mode API (library) to interact with network devices/events on a host device. It is sold to companies as a tool that
-            can be embedded within their own programs and as such, the SDK seems to be moderately widely deployed in a number of environments.
-        </p>
-        <p>
-            The instance of NetFilterSDK reviewed in this post is a vendor's <i>Windows</i> version because of two main reasons:
-            <ul>
-                <li><span>I only have experience in reversing <i style="font-weight: 700;">Windows</i> drivers, not those for MacOS/Linux, and...</span></li>
-                <li><span>This vulnerability was initially discovered in a third-party vendor's Windows application that uses NetFilterSDK.</span></li>
-            </ul>
+            can be embedded within their own programs and as such, the SDK seems to be pretty widely deployed in a number of environments.
         </p>
         <p>
             It's probably also worth noting that the binary name 'NetFilterSDK' was used by
@@ -43,22 +36,20 @@
                 malware that ended up being signed by Microsoft
             </a>, leading to a substantial amount of name-confusion between the virus and legitimate product online.
         </p>
+        <p>
+            There are two main vulnerabilities that are outlined in this writeup: a lack of security level properties applied to
+            a repackaged NetFilterSDK driver, and the NetFilterSDK's race condition in enforcing security parameters.
+            The former provides access to a machine's live networking traffic (including possible SSL decryption) as signed by an
+            unnamed vendor, and the latter provides similar access to any driver based on the SDK regardless of security parameters.
+        </p>
         <center>
             <i style="color: rgba(0,247,254,0.4);">
-                The name of the third-party vendor whose application is vulnerable is <b>not</b> disclosed here as, due to a lack of communication,
-                the vulnerability remains unpatched - if the situation changes (i.e, the issue is patched, the driver's certificate is revoked,
-                or something else), I will look at providing the company's name.
+                The name of the third-party vendor whose application is vulnerable is <b>not</b> disclosed here as the vulnerability has not been fixed.
             </i>
         </center>
         <h2>Finding an Interesting Driver</h2>
         <p>
-            Going all the way back to the initial research phase, I can't entirely remember if I had already developed
-            <a href="https://github.com/michaellrowley/PE-Imports">PE-Imports</a> to automate scanning of driver binaries or
-            if I just decided that it would be fun to poke at the third-party driver (which later turned out to be a repackaged
-            NetFilterSDK driver).
-        </p>
-        <p>
-            Either way, let's take a look at what PE-Imports <i>would</i> have output if it had been used to
+            Let's take a look at what <a href="https://github.com/michaellrowley/PE-Imports">PE-Imports</a> would output if it was used to
             scan the driver in question (reordered listing for readability):
         </p>
         <div class="code block-code" style="border-left: none;border-top: 3px solid rgba(0,247,254,1);">
@@ -72,8 +63,7 @@
             </div>
         </div>
         <p>
-            There are some imports to suggest that this driver could be interesting and some that would imply that it isn't.</br>
-            First of all, we have some references to functions with 'MDL' or references to 'mapping' in the name,
+            First of all, there are some references to functions with 'Mdl' or references to 'mapping' in the name,
             these imports refer to interactions with a <a href="https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/using-mdls">'memory descriptor listing'</a>
             where Windows can map physical memory pages to virtual memory buffers - this is a pretty important function as, if misused,
             it is capable of acting as a privilege escalation vector (this is how most instances of such user-to-kernel escalations happen).
@@ -177,8 +167,8 @@
 
         <script src="https://gist.github.com/michaellrowley/6a42eba6bf6b04a272e7ef6e3cf79d3e.js"></script>
         <p>
-            In conclusion, as long as our driver doesn't set the <span class="code inline-code">seclevel</span> registry key to <span class="code inline-code">1</span> or <span class="code inline-code">2</span>,
-            opening a handle is cleared from Windows verification processes. In case you were wondering, here's the flow of the <span class="code inline-code">IRP_MJ_CREATE</span> handler, which could have
+            In conclusion, as long as the driver doesn't set the <span class="code inline-code">seclevel</span> registry key to <span class="code inline-code">1</span> or <span class="code inline-code">2</span>,
+            opening a handle is fine from Windows' verification perspective. In case you were wondering, here's the flow of the <span class="code inline-code">IRP_MJ_CREATE</span> handler, which could have
             been used to reject an unauthorised handle request but simply prevents multiple handles being issued using a spinlock (a.k.a 'fancy kernel mutex'):
         </p>
         <script src="https://gist.github.com/michaellrowley/7de43ff74c9c4359d0328ecf8f6ee62d.js"></script>
@@ -217,7 +207,7 @@
         <h2>Conclusion</h2>
         <p>
             There seems to be a lack of awareness about how device interaction could be limited throughout this application, ranging from the vendor failing to use <span class="code inline-code">seclevel</span>
-            to the fact that the <span class="code inline-code">seclevel</span> key probably wouldn't have changed much as the security descriptors are applied <i>after</i> the
+            to the fact that the key probably wouldn't have changed much as the security descriptors are applied <i>after</i> the
             device is setup, a symbolic link is applied, and an IRP dispatch handler is assigned.
         </p>
         <p>
@@ -231,7 +221,7 @@
             the likes of Cisco, Google, Oracle, Symantec, and Siemens as its customers and so it seems unlikely that an individual subscriber such as myself will get a response from their support team any time soon.
         </p>
         <hr>
-        <h3>Tracking a Certificate</h3>
+        <h3>The Driver's Certificate</h3>
         <p>
             After attempting to make contact with the distributors of this driver, I found that the service binary is signed under their company name.
             However, the driver -- in addition to being <a href="https://learn.microsoft.com/en-us/windows-hardware/test/hlk/">WHQL</a>-certified --
@@ -240,14 +230,15 @@
         </br></br>
             The vendor has been registered on <a href="https://www.rik.ee/">Estonia's company register</a> since 2020 with an address in Kyiv (Ukraine), but
             their website's WHOIS history (until it was hidden after 2021) claimed an address in Lipetsk (Russia) was in use, and the website's servers were
-            also based in Lipetsk (mail and ancillary servers are still based there), possibly suggesting that a leaked certificate is less likely than developer(s) sharing a certificate between projects.</p>
-        <hr>
+            also based in Lipetsk (mail and ancillary servers are still based there), possibly suggesting that a leaked certificate is less likely than
+            developer(s) sharing a certificate between projects, especially since a publicly leaked certificate would likely have been revoked by Microsoft.</p>
+
         <p>
-            Given the possible locations of the vendor company or NetFilterSDK (which is definitely based in Russia), it's worth reminding anyone reading this that <span style="color:rgb(255, 230, 10);">there are a number
-            of financial and non-financial ways to support Ukraine</span> as they repel Russia's invasion and accompanying
-            <a href="https://www.icc-cpi.int/news/situation-ukraine-icc-judges-issue-arrest-warrants-against-vladimir-vladimirovich-putin-and">war crimes</a> - hence the <em>clickable</em> banner at the bottom of this page
-            if you'd like to learn more.
+            Given the possible locations of the vendor company or NetFilterSDK (which is definitely based in Russia), it's worth reminding anyone reading this
+            that there are a number of financial and non-financial ways to
+            <a style="color: yellow; text-decoration-color: yellow;" href="https://donation.dec.org.uk/ukraine-humanitarian-appeal">support Ukraine</a>.
         </p>
+        <hr>
         <p>
             And finally, the email address associated with the vendor's company registration, domain, and the user-mode service's signature (but not mentioned on the
             vendor's website) is a personal one that has been listed on <a href="https://haveibeenpwned.com/">HaveIBeenPwned</a> as being exposed
@@ -255,14 +246,10 @@
         </p>
         <p>
             Given that a chunk of fortune 500 companies seem to be using this person's driver,
-            it seems incredibly risky to be using a personal email in signing certificates (and probably other aspects) when that address
-            is at a high risk of <a href="https://owasp.org/www-community/attacks/Credential_stuffing">credential stuffing</a> attacks.
+            it seems incredibly risky to be using a personal email in signing executable certificates
+            (and probably other areas) when that address
+            is at high risk of <a href="https://owasp.org/www-community/attacks/Credential_stuffing">credential stuffing</a> attacks.
         </p>
-        <footer>
-            <a href="https://donation.dec.org.uk/ukraine-humanitarian-appeal">
-                <div style="z-index: 1; opacity: 0.95; height: 40px; background: linear-gradient(to bottom, rgb(0, 196, 203) 0%, rgb(0, 156, 161) 49%, rgb(203, 182, 0) 50%, rgb(155, 140, 0) 100%); background-size: contain; color: #2e2e2e; bottom: 0; left: 0; right: 0;"></div>
-            </a>
-        </footer>
     </body>
     <script src="../../blog.js"></script>
 </html>

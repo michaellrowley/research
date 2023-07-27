@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+    <head>
+	    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+	    <script async src="https://www.googletagmanager.com/gtag/js?id=G-HLG1SDB3SL"></script>
+	    <link rel="stylesheet" href="../../blog.css"/>
+		<link rel="icon" type="image/x-icon" href="https://www.michaelrowley.dev/favicon.ico">
+        <title>VIAL</title>
+
+        <style>
+	        * {
+				/* This page looks bad with central alignment */
+		        text-align: left;
+	        }
+        </style>
+    </head>
+    <body>
+    	<div id="scroll-tab">
+            <center>
+                <div id="scroll-body"></div>
+                <div id="scroll-marker" style="height: 1%;"></div>
+            </center>
+        </div>
+
+        <h1>Vulnerability Indexing & Assessment Logs (VIAL)</h1>
+        <a href="https://www.michaelrowley.dev/research/" class="home-tag" style="text-decoration: none; color: black;"><span class="back-arrow"></span>BACK</a>
+
+        </br>
+        <i><a href="https://vial.michaelrowley.dev/">Try it out!</a></i>
+
+        <h2>Background</h2>
+        <p>
+	        In 2016, there was some <a href="https://lwn.net/Articles/679436/">dissatisfaction</a> within the cybersecurity community with the drawn-out nature of the CVE
+			allocation and publishing systems. This led to community-led proposals for CVE alternatives including the
+			<a href="https://www.openwall.com/ove/">Openwall Vulnerability Entries</a>
+			(OVE) and the now-abandoned <a href="https://lwn.net/Articles/679441/">Distributed Weakness Filing</a> (DWF) systems.
+        </p>
+        <p>
+			Both of the above systems aimed to address the speed of Mitre's assignment and verification process: OVE did so by making it extremely cheap
+			to publish an entry (clicking a button would generate a unique identifier without human intervention) but risked introducing
+			spam and invalid vulnerabilities into its network - DWF attempted to address these issues by having distributed verification
+			entities which would be closer to the vulnerability (i.e, working as a maintainer or having extensive subject knowledge), and introduced
+			a twist in <a href="https://web.archive.org/web/20180611162946/https://github.com/distributedweaknessfiling/DWF-Documentation/">its protocol</a>
+			by suggesting that the vulnerability entries' database could be hosted on a blockchain.
+        </p>
+        <p>
+        	Neither of these alternatives to CVE found widespread adoption and subsequently faded from public view (or merged with vulnerability database
+         	aggregation projects like Google's <a href="https://osv.dev/">OSV</a> 'database for open-source').
+          </br>
+          	Over half a decade later, I stumbled upon the original <a href="https://lwn.net/Articles/679441/">LWN</a> post and was intrigued by
+           	the idea of having a vulnerability tracking system that would both reduce reliance on individual providers such as Mitre
+            (<a href="https://cve.mitre.org/">CVE</a>s) and GitHub (<a href="https://github.com/advisories">GHSA</a>s) and the minimize any
+            incongruity that attempts to interoperate with more than one of those systems have been found to introduce, so I decided to make my own vulnerability
+            tracking system that would be capable of linking to existing providers' records whilst maintaining an independent copy of records that could
+            be modified, updated, or corrected with ease.
+        </p>
+
+        <h2>System Structure</h2>
+        </br>
+       	<img style="margin-left: 5px;background-color: transparent; float: right; height: 300px;" src="overview.svg"/>
+        <p>
+        	At the core of VIAL is a HTTP API written in Python 3. This API has endpoints for adding, publishing, modifying, and viewing specific vulnerability entries
+         	as and when the user requests such an action (either through a web interface or by sending HTTP requests to the API).
+        </p>
+        <p>
+        	A major goal of this project was to minimize the cost and dependencies required to operate VIAL in its entirety over
+         	a long term (due to how frequently alternatives such as DWF were seen to be abandoned). To that extent, the <i style="text-decoration: underline;">user-facing</i>
+          	aspects of the Web UI (viewing and enumerating entries) are able to function independently of the Rest API through
+           	the techniques outlined below.
+        </p>
+        <h3>Adding a New Entry</h3>
+        <p>
+        	When a new vulnerability needs to be added to the database, the following occurs:
+        </p>
+	    <ul>
+			<li><span>An API request is received with the JSON body containing most of the entry's details</span></li>
+			<li><span>The entry's JSON is 'tidied' (assigned an incremental VIA-ID and upload date)</span></li>
+			<li><span>An encryption key is generated randomly using a <a href="https://en.wikipedia.org/wiki/Cryptographically_secure_pseudorandom_number_generator">CSPRNG</a></span></li>
+			<li><span>The entry's JSON is <a href="https://cryptography.io/en/latest/fernet/">symetrically</a> encrypted</span></li>
+			<li><span>The ciphertext of the above step is uploaded to IPFS <span style="font-style: italic;">without</span> the decryption key and the CID of the new entry is <a href="https://docs.ipfs.tech/how-to/pin-files/">pinned</a></span></li>
+			<li><span>The <a href="https://docs.ipfs.tech/concepts/content-addressing/">CID</a> of the 'entrylist' (an array of all VIA entries) is resolved via <a href="https://dnslink.dev/">DNSLink</a> (<span class="code inline-code">entries.vial.michaelrowley.dev</span>)</span></li>
+			<li><span>The entrylist is retrieved as a JSON object and the CID and VIA-ID of the new entry are inserted</span></li>
+			<li><span>A newly-appended entrylist is uploaded to the IPFS network and is pinned by the local system</span></li>
+			<li><span>The entrylist's new CID is written to the <a href="https://www.cloudflare.com/en-gb/learning/dns/dns-records/dns-txt-record/"><span class="code inline-code" style="color: rgba(0,247,255, 1);">TXT</span></a> DNS entry of <span class="code inline-code">entries.vial.michaelrowley.dev</span></span></li>
+			<li><span>The CID and symmetric key are returned to the user where it is displayed on a webpage</span></li>
+	    </ul>
+		<center>
+		<img style="width: 100%;" src="./add-record.png">
+		</center>
+		<p>
+			This process is essentially language agnostic (but was implemented in Python 3) and essentially all of the key steps above
+			could be emulated with a bash script or your favourite <a href="https://insomnia.rest/">API testing tool</a>.
+		</p>
+		<div class="code block-code">
+            <span class="language-tag">bash</span> <span class="language-tag">dig</span>
+            <span>Retrieving VIA entries via Linux terminal</span>
+        <hr>
+        	<code>
+<span style="color: rgba(90, 250, 90, 1);">$</span> dig -t TXT entries.vial.michaelrowley.dev
+<span style="color: rgba(255, 255, 255, 0.6);">; <<>> DiG <<>> -t txt entries.vial.michaelrowley.dev
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 10463
+;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+;; ANSWER SECTION:
+entries.vial.michaelrowley.dev.	300 IN	TXT	"<span style="color: rgba(0,247,255,1);">bafkreicgoaz2sfvy4yfcqfg5olwaic5kswvpcxuha7l4laevi6scp4w4zq</span>"</span>
+
+<span style="color: rgba(90, 250, 90, 1);">$</span> ipfs cat bafkreicgoaz2sfvy4yfcqfg5olwaic5kswvpcxuha7l4laevi6scp4w4zq
+<span style="color: rgba(255, 255, 255, 0.6);">{
+	"VIA-1": {
+		"cid": "<span style="color: rgba(255, 247, 0,1);">bafkreihc2qfourone4ofe5m4lqc6c36xfmehd54mu6x5ckrjcemjnrfzyy</span>",
+		"status": "PUBLISHED",
+		"key": "53514d6d5f2d3445766c432d3568425a706f6b425a3166636c47706a46737250532d5642426d424c4a30733d</span>"
+	}
+}</span>
+</code>
+		</div>
+
+		<h3>Publishing an Entry</h3>
+		<img style="margin-left: 5px;background-color: transparent; float: right; height: 350px;" src="./pt-idx.gif"/>
+		<p>In order to publish an entry, the symmetric key used to encrypt the entry's JSON is simply attached to its listing
+		in the entrylist which is reuploaded and pinned.</p>
+		<ul>
+			<li><span>An API request is received containing a JSON body with the relevant entry's symmetric decryption key</span></li>
+			<li><span>The <a href="https://docs.ipfs.tech/concepts/content-addressing/">CID</a> of the 'entrylist' (an array of all VIA entries) is resolved via <a href="https://dnslink.dev/">DNSLink</a> (<span class="code inline-code">entries.vial.michaelrowley.dev</span>)</span></li>
+			<li><span>The entrylist is retrieved as a JSON object</span></li>
+			<li><span>The entry is located using the <code class="code inline-code">key_hash</code> member of each entrylist item</span></li>
+			<li><span>Once the correct entry has been found, the provided key is inserted into the entrylist member of the VIA entry</span></li>
+			<li><span>The new entrylist is uploaded to IPFS and the relevant DNS subdomain's TXT value is set to the new entrylist CID</span></li>
+		</ul>
+
+		<h3>Browsing/Viewing Entries</h3>
+		<p>
+			Despite it being possible to view entries using the API outlined in the previous sections, doing so would mean that a server/device would need to
+			be running 24/7 to serve such information which isn't ideal. To get around this issue, the viewing/browsing webpages have their own JavaScript code
+			that handles manually retrieving, parsing, displaying, and interacting with VIA entries via the IPFS network without hosting a own backend server.
+		</p>
+		<p>
+			The client-side JavaScript is only half of the solution as IPFS can only guarantee data's presence when it is <a href="https://docs.ipfs.tech/how-to/pin-files/">'pinned'</a>,
+			and therefore a pinning service (<a href="https://pinata.cloud/">Piñata</a>) and <a href="https://docs.ipfs.tech/concepts/ipfs-gateway/">IPFS gateway</a> (the official ipfs.io gateway between the typical HTTP internet and the IPFS network) was used.
+			</br>
+			As a result of this setup, it's also possible to view unpublished entries by including the hex decryption key in the view.html url, meaning that
+			it's possible for an entry to be viewed by specific people via a 'magic link' containing the decryption key and VIA ID.
+		</p>
+
+		<h2>Final Notes</h2>
+		<p>
+			While I haven't released the source code to the backend system publicly, the viewing and browsing frontend is available for public use at <a href="https://vial.michaelrowley.dev/">https://vial.michaelrowley.dev/</a>.
+			The information provided in this post should be enough for anyone interested to develop their own version.
+			</br>
+			Additionally, it is worth noting that in an attempt to mitigate any ciphertext size-based attacks, the API appends a CSPRNG-generated
+			number of space characters into the JSON of all VIA entries, meaning that any attempts to derive information about the plaintext's
+			key fields based on the ciphertext block size should be invalidated due to cryptographic implementation's block rounding combined
+			with this additional 'postfix' protection.
+		</p>
+    </body>
+    <script src="../../blog.js"></script>
+</html>

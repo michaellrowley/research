@@ -1,8 +1,5 @@
 <!DOCTYPE html>
 <html>
-    <!--
-        It's faster to fetch resources from an external site rather than the server hosting this page.
-    -->
     <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <script async src="https://www.googletagmanager.com/gtag/js?id=G-HLG1SDB3SL"></script>
@@ -14,10 +11,15 @@
     <body>
         <h1>Research Posts</h1>
         <h3><a href="https://www.michaelrowley.dev/">Home</a></h3>
-    </br></br>
+</br></br>
         <div id="main-posts">
-            <div class="project-item" onclick="window.open('./posts/nfsdk/nfsdk.html', '_blank');">
-                <h2>Driver Privilege Escalation Walkthrough</h2>
+	        <div class="project-item" onclick="window.open('./posts/vial/vial.html', '_blank');">
+                <h2>Vulnerability Indexing & Assessment</h2>
+                <p>The development of a <em>full-stack</em> system for indexing vulnerabilities and cross-referencing between platforms. This systems makes use of a <em>peer-to-peer network</em> known as the <em>InterPlanetary File System</em> (<em>IPFS</em>)</p>
+            </div>
+            <center><div class="line-separator"></div></center>
+	        <div class="project-item" onclick="window.open('./posts/nfsdk/nfsdk.html', '_blank');">
+                <h2>Driver Privilege Escalation (CVE-2023-35863)</h2>
                 <p>A detailed explanation of how a timing-based <em>race condition</em> led to the user-mode access of a <em>low-level networking driver</em>.</p>
             </div>
             <center><div class="line-separator"></div></center>

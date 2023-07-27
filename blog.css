@@ -75,6 +75,10 @@ p, i {
     font-size: 12pt;
 }
 
+em {
+	text-shadow: rgba(255, 255, 255, 0.4) 1px 1px 4px;
+}
+
 p {
     font-weight: 600;
 }
@@ -144,6 +148,7 @@ hr {
 }
 
 li {
+	margin-top: 4px;
     color: rgba(0,247,255, 1);
     font-family: Inter;
     font-size: 13pt;
@@ -202,6 +207,10 @@ img {
 
 .block-code {
     padding: 10px;
+}
+
+.block-code code {
+	white-space: pre;
 }
 
 video {
